@@ -1,102 +1,14 @@
-#!/usr/bin/env bash
-# bin/compile <build-dir> <cache-dir> <env-dir>
-# $HOME: /app
+#!/bin/sh
 
 set -e
 
-BUILD_DIR=${1:-.}
-CACHE_DIR=${2:-}
-ENV_DIR=${3:-}
-BP_DIR=$(cd "$(dirname "${0:-}")"; cd ..; pwd)
+BUN_VERSION="1.1.27"
 
-### Load dependencies
-source "$BP_DIR/lib/json.sh"
+echo "-----> Installing Bun $BUN_VERSION"
 
-HEROKU_DIR=$BUILD_DIR/.heroku
-BIN_DIR=$HEROKU_DIR/bin
+curl -fsSL https://bun.sh/install | bash -s -- bun-v$BUN_VERSION
 
-# To enable the local source build cache path, copy the files and match the build path with the startup path.
-cp -rp $BUILD_DIR $HOME
-cd $HOME
+export PATH=$HOME/.bun/bin:$PATH
+echo 'export PATH=$HOME/.bun/bin:$PATH' >> $HOME/.profile
 
-# Export the content of the ENV_DIR into the environment
-if [ -d "$ENV_DIR" ]; then
-  for e in $(ls $ENV_DIR); do
-    export "$e=$(cat $ENV_DIR/$e)"
-  done
-fi
-
-# Allow Bun version pinning via a choice of 3 different files
-if [ -f $BUILD_DIR/.bun-version ]
-then
-  BUN_VERSION="$(cat $BUILD_DIR/.bun-version)"
-elif [ -f $BUILD_DIR/runtime.bun.txt ]
-then
-  BUN_VERSION="$(cat $BUILD_DIR/runtime.bun.txt)"
-elif [ -f $BUILD_DIR/runtime.txt ]
-then
-  BUN_VERSION="$(cat $BUILD_DIR/runtime.txt)"
-fi
-echo "Installing Bun $BUN_VERSION"
-
-if [[ -n $BUN_VERSION ]]
-then
-  # prepend a v to version numbers, eg 1.0.19 -> v1.0.19
-  if [[ $BUN_VERSION =~ ^[0-9] ]]; then
-    BUN_VERSION="v${BUN_VERSION}"
-  fi
-  BUN_INSTALL_VERSION="-s bun-$BUN_VERSION"
-fi
-
-# install bun
-export BUN_INSTALL=$BUILD_DIR/.heroku
-export BUN_DIR=$BUILD_DIR/.heroku/cache
-curl -fsSL https://bun.sh/install | bash $BUN_INSTALL_VERSION
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# set environment variables
-PROFILE_PATH="$BUILD_DIR/.profile.d/bun.sh"
-mkdir -p $(dirname $PROFILE_PATH)
-echo 'export PATH="$HOME/.heroku/bin:$PATH"' >> $PROFILE_PATH
-echo 'export BUN_DIR="$HOME/.heroku/cache"' >> $PROFILE_PATH
-
-echo "Installed Bun v$(bun --version)"
-
-set +e
-
-cd $BUILD_DIR
-
-# download dependencies
-if [[ -f package.json && ! -f .skip-bun-install ]]
-then
-  echo "Installing dependencies..."
-  bun install
-fi
-
-has_heroku_prebuild_script=$(has_script "package.json" "heroku-prebuild")
-if [[ "$has_heroku_prebuild_script" == "true" && ! -f .skip-bun-heroku-prebuild ]]
-then
-  echo "Running Heroku prebuild script..."
-  bun run heroku-prebuild
-fi
-
-has_build_script=$(has_script "package.json" "build")
-if [[ "$has_build_script" == "true" && ! -f .skip-bun-build ]]
-then
-  echo "Building application..."
-  bun run build
-  echo "Done building application..."
-fi
-
-has_heroku_postbuild_script=$(has_script "package.json" "heroku-postbuild")
-if [[ "$has_heroku_postbuild_script" == "true" && ! -f .skip-bun-heroku-postbuild ]]
-then
-  echo "Running Heroku postbuild script..."
-  bun run heroku-postbuild
-fi
-
-# Clean up unnecessary files to reduce slug size
-echo "Cleaning up unnecessary files..."
-rm -rf $BUILD_DIR/.heroku/cache
-rm -rf $BUILD_DIR/node_modules/.cache
-rm -rf $BUILD_DIR/tmp
+echo "PATH after installation: $PATH"
